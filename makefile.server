@@ -1,0 +1,27 @@
+IDIR = inc
+CC=gcc
+CFLAGS=-ggdb -I$(IDIR) -Wall
+
+SRCDIR = src
+ODIR = obj
+LDIR = lib
+
+LIBS=-lm
+
+_DEPS = config.h message.h
+DEPS = $(patsubst %,$(IDIR)/%,$(_DEPS))
+
+_OBJ = server.o message.o
+OBJ = $(patsubst %,$(ODIR)/%,$(_OBJ))
+
+
+$(ODIR)/%.o: $(SRCDIR)/%.c $(DEPS)
+	$(CC) -c -o $@ $< $(CFLAGS)
+
+server: $(OBJ)
+	gcc -o $@ $^ $(CFLAGS) $(LIBS)
+
+.PHONY: clean
+
+clean:
+	rm -f server $(ODIR)/*.o *~ core $(INCDIR)/*~ 

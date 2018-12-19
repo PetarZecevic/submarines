@@ -1,0 +1,42 @@
+IDIR = inc
+# the compiler: gcc for C program, define as g++ for C++
+CC=gcc
+
+# compiler flags:
+# -g    adds debugging information to the executable file
+# -Wall turns on most, but not all, compiler warnings
+CFLAGS=-ggdb -I$(IDIR) -Wall
+
+SRCDIR = src
+ODIR = obj
+LDIR = lib
+
+# Define any libraries to link into executable (the math library -lm)
+# Use the -llibname option (this will link in libm.so)
+LIBS=-lm
+
+_DEPS = config.h interface.h table.h message.h
+DEPS = $(patsubst %,$(IDIR)/%,$(_DEPS))
+
+_OBJ = player.o interface.o table.o message.o
+OBJ = $(patsubst %,$(ODIR)/%,$(_OBJ))
+
+# The -c flag says to generate the object file
+# The -o $@ says to put the output of the compilation in the file named on the left side of the :
+# Special macros $@ and $^ are the left and right sides of the :
+# The $< is the first item in the dependencies list, and the CFLAGS macro is defined above
+$(ODIR)/%.o: $(SRCDIR)/%.c $(DEPS)
+	$(CC) -c -o $@ $< $(CFLAGS)
+
+# the build target executable:
+player: $(OBJ)
+	gcc -o $@ $^ $(CFLAGS) $(LIBS)
+
+# The .PHONY rule keeps make from doing something with a file named clean
+.PHONY: clean
+
+# To start over from scratch, type 'make clean'.  This
+# removes the executable file, as well as old .o object
+# files and *~ backup files:
+clean:
+	rm -f player $(ODIR)/*.o *~ core $(INCDIR)/*~ 
