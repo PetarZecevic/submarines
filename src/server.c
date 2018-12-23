@@ -32,7 +32,8 @@ typedef struct Player
 {
     int sock;
     int id;
-    char message[DEFAULT_BUFLEN];
+    char coordMessage[COORD_LENGTH];
+    char confirmMessage[CONFIRM_LENGTH];
     char errorMessage[DEFAULT_BUFLEN];
     char name[DEFAULT_BUFLEN];
 }Player;
@@ -41,24 +42,28 @@ bool ActivePlayerLogic(Player* activePlayer, Player* passivePlayer, int* active,
 {
     bool success = true;
     //wait_for_player1_coordinate;
-    if(WrapperRecv(activePlayer->sock, activePlayer->message, DEFAULT_BUFLEN, activePlayer->errorMessage))
+    memset(activePlayer->coordMessage, 0, COORD_LENGTH);
+    if(WrapperRecv(activePlayer->sock, activePlayer->coordMessage, COORD_LENGTH, activePlayer->errorMessage))
     {
+        printf("%s send %s\n", activePlayer->name, activePlayer->coordMessage);
         //coord = parse_player1_message;
         //send_player2_coord_message;
-        if(WrapperSend(passivePlayer->sock, activePlayer->message, 2, passivePlayer->errorMessage))
+        if(WrapperSend(passivePlayer->sock, activePlayer->coordMessage, COORD_LENGTH, passivePlayer->errorMessage))
         {
-            if(WrapperRecv(passivePlayer->sock, passivePlayer->message, DEFAULT_BUFLEN, passivePlayer->errorMessage))
+            memset(passivePlayer->confirmMessage, 0, CONFIRM_LENGTH);
+            if(WrapperRecv(passivePlayer->sock, passivePlayer->confirmMessage, CONFIRM_LENGTH, passivePlayer->errorMessage))
             {
+                printf("%s send %s\n", passivePlayer->name, passivePlayer->confirmMessage);
                 //wait_for_player2_confirmation;
                 //confirmation = parse_player2_message;
                 //if confirmation == lost:
-                if(strcmp(passivePlayer->message, LOST) == 0)
+                if(strncmp(passivePlayer->confirmMessage, LOST_GAME, CONFIRM_LENGTH) == 0)
                 {
                     //game_active = false;
                     *gameActive = false;
                 }                                
                 //else if confirmation == miss:
-                else if(strcmp(passivePlayer->message, MISS) == 0)
+                else if(strncmp(passivePlayer->confirmMessage, MISSED_FIELD, CONFIRM_LENGTH) == 0)
                 {
                     //active_player = player2;
                     *active = passivePlayer->id;
@@ -70,7 +75,7 @@ bool ActivePlayerLogic(Player* activePlayer, Player* passivePlayer, int* active,
                     *active = activePlayer->id;
                 }
                 //send_player1_confirmation;
-                if(!WrapperSend(activePlayer->sock, passivePlayer->message, strlen(passivePlayer->message), activePlayer->errorMessage))
+                if(!WrapperSend(activePlayer->sock, passivePlayer->confirmMessage, CONFIRM_LENGTH, activePlayer->errorMessage))
                 {
                     // error section
                     printf("%s error: %s\n", activePlayer->name, activePlayer->errorMessage);
@@ -165,10 +170,11 @@ int main(int argc , char *argv[])
     player2.id = PLAYER2;
     strcpy(player2.name, "Player2");
 
+    char readyMessage[1];
     //Receive a message from player1
-    if(WrapperRecv(player1.sock, player1.message, DEFAULT_BUFLEN, player1.errorMessage))
+    if(WrapperRecv(player1.sock, readyMessage, 1, player1.errorMessage))
     {
-        printf("Message from %s: %s\n", player1.name, player1.message);
+        printf("Message from %s: %s\n", player1.name, readyMessage);
     }
     else
     {
@@ -177,16 +183,15 @@ int main(int argc , char *argv[])
     }
 
     //Receive a message from player2
-    if(WrapperRecv(player2.sock, player2.message, DEFAULT_BUFLEN, player2.errorMessage))
+    if(WrapperRecv(player2.sock, readyMessage, 1, player2.errorMessage))
     {
-        printf("Message from %s: %s\n", player2.name, player2.message);
+        printf("Message from %s: %s\n", player2.name, readyMessage);
     }
     else
     {
         printf("%s error: %s\n", player2.name, player2.errorMessage);
         return 1;
     }
-
 
     int activePlayer = PLAYER1;
     if(WrapperSend(player1.sock, ACTIVE, strlen(ACTIVE), player1.errorMessage) && 

@@ -153,8 +153,10 @@ int GameLoop(int playerSocket)
 	
 	GameState gameState = INIT;
 
-	char serverMessage[DEFAULT_BUFLEN];
-	char errorMessage[DEFAULT_BUFLEN];
+	// Messages
+	char coordMessage[COORD_LENGTH] = {0};
+	char confirmMessage[CONFIRM_LENGTH] = {0};
+	char errorMessage[DEFAULT_BUFLEN] = {0};
 
 	int submarine1LostFields = 0;
 	int submarine2LostFields = 0;
@@ -222,16 +224,14 @@ int GameLoop(int playerSocket)
 				break;
 			case PLAYING:
 				if(!startedGame)
-				{
-					strcpy(serverMessage, READY);
-					if(WrapperSend(playerSocket, serverMessage, strlen(READY), errorMessage))
+				{	
+					char role[2];
+					if(WrapperSend(playerSocket, READY, strlen(READY), errorMessage))
 					{
-						printf("Waiting for server response...");
-						if(WrapperRecv(playerSocket, serverMessage, DEFAULT_BUFLEN, errorMessage))
+						memset(role, 0, 2);
+						if(WrapperRecv(playerSocket, role, 2, errorMessage))
 						{
-							printf("Message from server: %s\n", serverMessage);
-							usleep(4000*1000);
-							if(strcmp(serverMessage, ACTIVE) == 0)
+							if(strncmp(role, ACTIVE, 1) == 0)
 							{
 								active = true;
 							}
@@ -268,32 +268,32 @@ int GameLoop(int playerSocket)
 							GetRowColumnInput(&r, &c);
 							if(CoordValid(r, c))
 							{
-								serverMessage[0] = r + '0';
-								serverMessage[1] = c + '0';
+								coordMessage[0] = r + '0';
+								coordMessage[1] = c + '0';
 								// Send move.
-								if(WrapperSend(playerSocket, serverMessage, 2, errorMessage))
+								if(WrapperSend(playerSocket, coordMessage, COORD_LENGTH, errorMessage))
 								{
+									memset(confirmMessage, 0, CONFIRM_LENGTH);
 									// Receive result, hit or miss.
-									if(WrapperRecv(playerSocket, serverMessage, DEFAULT_BUFLEN, errorMessage))
+									if(WrapperRecv(playerSocket, confirmMessage, CONFIRM_LENGTH, errorMessage))
 									{
-										printf("Message from server: %s\n", serverMessage);
-										getchar();
-										if(strcmp(serverMessage, HIT) == 0)
+										if(strncmp(confirmMessage, LOST_FIELD, CONFIRM_LENGTH) == 0 ||
+											strncmp(confirmMessage, LOST_SUBMARINE_1, CONFIRM_LENGTH) == 0 ||
+											strncmp(confirmMessage, LOST_SUBMARINE_2, CONFIRM_LENGTH) == 0)
 										{
-											enemyTable[(int)r][(int)c] = HIT[0];
-											printf("Hit.\n");
-											usleep(1000*1000);
+											enemyTable[(int)r][(int)c] = HIT;
 										}
-										else if(strcmp(serverMessage, MISS) == 0)
+										else if(strncmp(confirmMessage, MISSED_FIELD, CONFIRM_LENGTH) == 0)
 										{
-											enemyTable[(int)r][(int)c] = MISS[0];
-											printf("Miss.\n");
+											if(enemyTable[(int)r][(int)c] == WATER)
+											{
+												enemyTable[(int)r][(int)c] = MISS;
+											}
 											active = false;
-											usleep(1000*1000);
 										}
-										else if(strcmp(serverMessage, WON) == 0)
+										else if(strncmp(confirmMessage, LOST_GAME, CONFIRM_LENGTH) == 0)
 										{
-											enemyTable[(int)r][(int)c] = HIT[0];
+											enemyTable[(int)r][(int)c] = HIT;
 											ClearScreen();
 											GameplayScreen(playerTable, enemyTable);
 											printf("You won game is over!\n");
@@ -330,35 +330,39 @@ int GameLoop(int playerSocket)
 				}
 				else
 				{	// PASSIVE
-					if(WrapperRecv(playerSocket, serverMessage, DEFAULT_BUFLEN, errorMessage))
+					memset(coordMessage, 0, COORD_LENGTH);
+					if(WrapperRecv(playerSocket, coordMessage, COORD_LENGTH, errorMessage))
 					{
-						printf("Message from server: %s\n", serverMessage);
-						getchar();
-						char r = serverMessage[0];
-						char c = serverMessage[1];
+						char r = coordMessage[0];
+						char c = coordMessage[1];
 						r -= '0';
 						c -= '0';
 						// Check if enemy got hit your submarine.
 						if(playerTable[(int)r][(int)c] == SUBMARINE)
 						{
 							// HIT
-							playerTable[(int)r][(int)c] = HIT[0];
+							playerTable[(int)r][(int)c] = HIT;
+							strcpy(confirmMessage, LOST_FIELD);
 							if(CheckSubmarineHit(submarine1, 1, (int)r, (int)c))
 							{
 								submarine1LostFields++;
+								strcpy(confirmMessage, LOST_SUBMARINE_1);
 							}
 							else if(CheckSubmarineHit(submarine2, 2, (int)r, (int)c))
 							{
 								submarine2LostFields++;
+								if(submarine2LostFields == 2)
+									strcpy(confirmMessage, LOST_SUBMARINE_2);
 							}
 							if((submarine1LostFields + submarine2LostFields) == 3)
 							{
-								// Lost game.
 								ClearScreen();
 								GameplayScreen(playerTable, enemyTable);
-								if(!WrapperSend(playerSocket, LOST, strlen(LOST), errorMessage))
+								// Lost game.
+								strcpy(confirmMessage, LOST_GAME);
+								if(!WrapperSend(playerSocket, confirmMessage, CONFIRM_LENGTH, errorMessage))
 								{
-									printf("%s\n", errorMessage);	
+									printf("%s\n", errorMessage);
 								}
 								printf("\nYou lost the game, game is over!\n");	
 								gameState = FIN;
@@ -366,23 +370,24 @@ int GameLoop(int playerSocket)
 							else
 							{	
 								// Lost one field.
-								if(!WrapperSend(playerSocket, HIT, strlen(HIT), errorMessage))
+								if(!WrapperSend(playerSocket, confirmMessage, CONFIRM_LENGTH, errorMessage))
 								{
 									printf("%s\n", errorMessage);
 									gameState = FIN;
 								}
-								printf("\nLost field!\n");
-								getchar();
 							}
 						}
 						else
 						{	// MISS
 							active = true;
-							playerTable[(int)r][(int)c] = MISS[0];
-							if(WrapperSend(playerSocket, MISS, strlen(MISS), errorMessage))
+							if(playerTable[(int)r][(int)c] == WATER)
+							{
+								playerTable[(int)r][(int)c] = MISS;
+							}
+							strcpy(confirmMessage, MISSED_FIELD);
+							if(WrapperSend(playerSocket, confirmMessage, CONFIRM_LENGTH, errorMessage))
 							{
 								printf("\nEnemy missed.\n");
-								getchar();
 							}
 							else
 							{

@@ -8,6 +8,8 @@
 // Characters
 #define SUBMARINE 'S'
 #define WATER '~'
+#define MISS ' '
+#define HIT 'X'
 
 // Communication
 #define DEFAULT_BUFLEN 512
@@ -18,11 +20,17 @@
 
 // Messages
 #define READY "R"
-#define WON "W"
-#define LOST "L"
+// Confirm messages
+#define COORD_LENGTH 2
+#define CONFIRM_LENGTH 2
+#define LOST_FIELD "LF"
+#define MISSED_FIELD "MF"
+#define WON_GAME "WG"
+#define LOST_GAME "LG"
+#define LOST_SUBMARINE_1 "S1"
+#define LOST_SUBMARINE_2 "S2"
+// Role in game messages
 #define PASSIVE "P"
 #define ACTIVE "A"
-#define MISS " "
-#define HIT "X"
 
 #endif // CONFIG_H

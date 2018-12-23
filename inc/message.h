@@ -12,6 +12,6 @@ extern bool WrapperRecv(int socket, void* buffer, size_t bufferLength, char* err
 /*
 Wrap around send function for easier error messages handling.
 */
-extern bool WrapperSend(int socket, const void* buffer, size_t bufferLength, char* errorBuffer);
+extern bool WrapperSend(int socket, void* buffer, size_t bufferLength, char* errorBuffer);
 
 #endif // MESSAGE_H
