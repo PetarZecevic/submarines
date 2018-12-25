@@ -10,9 +10,10 @@ void MainMenuScreen(void)
 {
 	printf("Options:\n");
 	printf(" 1. Set Coordinates for your submarines\n");
-	printf(" 2. Start Game\n");
-	printf(" 3. End Game\n");
+	printf(" 2. Start new game\n");
+	printf(" 3. End game\n");
 	printf(" 4. Resume to game\n");
+	printf(" 5. Exit\n");
 	return;
 }
 

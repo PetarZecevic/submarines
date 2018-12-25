@@ -3,7 +3,7 @@
 
 #include "table.h"
 
-typedef enum {INIT = 0, SET_COORD, PLAYING, PAUSE, FIN}GameState;
+typedef enum {INIT = 0, SET_COORD, READY_TO_PLAY, PLAYING, PAUSE, FIN}GameState;
 typedef enum {ACTIVE_PLAY, PASSIVE_PLAY, NOT_PLAY}EngineState;
 
 // Structure that holds all data needed for gameplay.
@@ -49,10 +49,9 @@ extern void InitGameStatus(GameStatus* gameStatus);
 Sends server message that player is ready and receives message that tells if player is active or passive in current gameplay.
 Parameter playerSocket is used as communication socket with server.
 It's assumed that player is already connected to server.
-Active or passive state is then stored in state.
-Returns false if error ocurred, otherwise true.
+State is returned, if error ocurred, NOT_PLAY state is returned.
 */
-extern bool GetRoleFromServer(int playerSocket, EngineState* state);
+extern EngineState GetRoleFromServer(int playerSocket);
 
 /*
 Checks given coordinate(r,c) in player's table, to send server a feedback through feedbackMessage about impact.

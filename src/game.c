@@ -5,7 +5,15 @@
 #include "message.h"
 #include "interface.h"
 
+#define ONE_SECOND 1000*1000 //micro-seconds
+
 char errorMessage[DEFAULT_BUFLEN];
+
+// Sleeps program for given ammount of seconds
+void WaitFor(int seconds)
+{
+	usleep(seconds * ONE_SECOND);
+}
 
 void PrintGameState(GameState gameState)
 {
@@ -16,6 +24,8 @@ void PrintGameState(GameState gameState)
 			printf("Place submarines in your table to start the game\n");
 			break;
 		case SET_COORD:
+			printf("Placing submarines in player's table\n");
+		case READY_TO_PLAY:
 			printf("Submarines placed, you are ready to start the game\n");
 			break;
 		case PLAYING:
@@ -27,6 +37,8 @@ void PrintGameState(GameState gameState)
 		case FIN:
 			printf("Game finished\n");
 			break;
+		default:
+			break;
 	}
 	return;
 }
@@ -37,14 +49,23 @@ void PrintGameplayInfo(const GameStatus* gameStatus)
 	// Player Info
 	printf("Submarine 1:\n");
 	printf("field1 ( %c , %c )\n", (gameStatus->submarine1[0].row + '1') , (gameStatus->submarine1[0].column + 'A'));
-	printf("fields left: %d\n", gameStatus->fieldsLeftSubmarine1);
+	printf("fields left: %d\n\n", gameStatus->fieldsLeftSubmarine1);
 	printf("Submarine 2:\n");
 	printf("field1 ( %c , %c )\n", (gameStatus->submarine2[0].row + '1') , (gameStatus->submarine2[0].column + 'A'));
 	printf("field2 ( %c , %c )\n", (gameStatus->submarine2[1].row + '1') , (gameStatus->submarine2[1].column + 'A'));
-	printf("fields left: %d\n", gameStatus->fieldsLeftSubmarine2);
+	printf("fields left: %d\n\n", gameStatus->fieldsLeftSubmarine2);
 	// Enemy info
 	printf("Sinked enemy's submarine 1: %d\n", gameStatus->wonSubmarine1);
-	printf("Sinked enemy's submarine 2: %d\n", gameStatus->wonSubmarine2);
+	printf("Sinked enemy's submarine 2: %d\n\n", gameStatus->wonSubmarine2);
+	
+	if(gameStatus->engineState == PASSIVE_PLAY)
+	{
+		printf("Waiting for enemy's move...\n");
+	}
+	else if(gameStatus->engineState == ACTIVE_PLAY)
+	{
+		printf("Your turn, guess coordinate of enemy's submarines\n");
+	}
 }
 
 void InitGameStatus(GameStatus* gameStatus)
@@ -59,9 +80,9 @@ void InitGameStatus(GameStatus* gameStatus)
 	gameStatus->wonSubmarine2 = 0;
 }
 
-bool GetRoleFromServer(int playerSocket, EngineState* state)
+EngineState GetRoleFromServer(int playerSocket)
 {
-	bool success = true;
+	EngineState retVal;
 	char role[2];
 	if(WrapperSend(playerSocket, READY, strlen(READY), errorMessage))
 	{
@@ -70,26 +91,24 @@ bool GetRoleFromServer(int playerSocket, EngineState* state)
 		{
 			if(strncmp(role, ACTIVE, 1) == 0)
 			{
-				*state = ACTIVE_PLAY;
+				retVal = ACTIVE_PLAY;
 			}
 			else if(strncmp(role, PASSIVE, 1) == 0)
 			{
-				*state = PASSIVE_PLAY;
+				retVal = PASSIVE_PLAY;
 			}
 		}
 		else
 		{
-			printf("%s\n", errorMessage);
-			success = false;
+			retVal = NOT_PLAY;
 		}
 	}
 	else
 	{
-		printf("%s\n", errorMessage);
-		success = false;
+		retVal = NOT_PLAY;
 	}
 	
-	return success;
+	return retVal;
 }
 
 bool CreateFeedback(int r, int c, char feedbackMessage[], GameStatus* gameStatus)
@@ -178,22 +197,10 @@ void GameEngine(int playerSocket, GameStatus* gameStatus)
 	
 	// Option from menu.
 	char option;
-	
-	// Flag for role logic.
-	static bool startedGame = false;
-
-	if(!startedGame)
-	{
-		printf("Waiting for other player to start the game...\n");	
-		if(!GetRoleFromServer(playerSocket, &(gameStatus->engineState)))
-		{
-			gameStatus->gameState = FIN;
-			return;
-		}
-		startedGame = true;
-	}
 
 	// Display gameplay screen.
+	ClearScreen();
+	PrintGameState(gameStatus->gameState);
 	GameplayScreen(gameStatus->playerTable, gameStatus->enemyTable);
 	PrintGameplayInfo(gameStatus);
 
@@ -220,27 +227,33 @@ void GameEngine(int playerSocket, GameStatus* gameStatus)
 						if(WrapperRecv(playerSocket, feedbackMessage, FEEDBACK_LENGTH, errorMessage))
 						{
 							if(InterpretFeedback(r, c, feedbackMessage, gameStatus))
-							{
+							{	
+								ClearScreen();
+								printf("Last Gameplay State\n");
+								PrintGameplayInfo(gameStatus);
 								printf("You won the game!\n");
-								gameStatus->gameState = FIN;
+								WaitFor(3);
+								gameStatus->gameState = INIT;
 							}
 						}
 						else
 						{
 							printf("%s\n", errorMessage);
+							WaitFor(2);
 							gameStatus->gameState = FIN;	
 						}
 					}
 					else
 					{
 						printf("%s\n", errorMessage);
+						WaitFor(2);
 						gameStatus->gameState = FIN;
 					}
 				}
 				else
 				{
 					printf("Coordinate not valid, try again!");
-					usleep(1000*1000);
+					WaitFor(1);
 				}
 				break;
 			case 2: // PAUSE GAME
@@ -248,7 +261,7 @@ void GameEngine(int playerSocket, GameStatus* gameStatus)
 				break;
 			default:
 				printf("Invalid option.\n");
-				usleep(1000*1000);
+				WaitFor(1);
 				break;
 		}
 	}
@@ -263,18 +276,24 @@ void GameEngine(int playerSocket, GameStatus* gameStatus)
 			c -= '0';
 			if(CreateFeedback(r, c, feedbackMessage, gameStatus))
 			{
+				ClearScreen();
+				printf("Last Gameplay State\n");
+				PrintGameplayInfo(gameStatus);
 				printf("You lost the game!\n");
-				gameStatus->gameState = FIN;
+				WaitFor(3);
+				gameStatus->gameState = INIT;
 			}
 			if(!WrapperSend(playerSocket, feedbackMessage, FEEDBACK_LENGTH, errorMessage))
 			{
 				printf("%s\n", errorMessage);
+				WaitFor(2);
 				gameStatus->gameState = FIN;
 			}
 		}
 		else
 		{
 			printf("%s\n", errorMessage);
+			WaitFor(2);
 			gameStatus->gameState = FIN;
 		}
 	}
@@ -284,10 +303,8 @@ void GameLoop(int playerSocket)
 {	
 	// Holds game data.
 	GameStatus gameStatus;
-	// Init game.
-	InitGameStatus(&gameStatus);
 	// Game flags.
-	bool gameFinished = false, alreadySet = false;
+	bool gameFinished = false;
 	// Option from menies.
 	char option;
 	// Loop.
@@ -297,55 +314,69 @@ void GameLoop(int playerSocket)
 		{
 		
 			case INIT:
+				// Init game.
+				InitGameStatus(&gameStatus);
 				ClearScreen();
 				PrintGameState(gameStatus.gameState);
 				MainMenuScreen();
-				option = GetUserOptionInput('1', '4');
+				option = GetUserOptionInput('1', '5');
 				switch (option)
 				{
 					case 1: // SET
 						gameStatus.gameState = SET_COORD;
 						break;
-					case 3: // END
+					case 5: // EXIT
 						gameStatus.gameState = FIN;
 						break;
 					default: // OTHER INPUT
 						printf("Invalid option.\n");
-						usleep(1000*1000);
+						WaitFor(1);
 						break;
 				}
 				break;
 			case SET_COORD:
 				ClearScreen();
-				if(!alreadySet)
-				{
-					SetCoordinates(gameStatus.playerTable, gameStatus.submarine1, gameStatus.submarine2);
-					ClearScreen();
-				}
-				alreadySet = true;
+				SetCoordinates(gameStatus.playerTable, gameStatus.submarine1, gameStatus.submarine2);
+				ClearScreen();
+				printf("Submarines placed\n");
+				PrintTable(gameStatus.playerTable);
+				WaitFor(3);
+				gameStatus.gameState = READY_TO_PLAY;
+				break;
+			case READY_TO_PLAY:
+				ClearScreen();
 				PrintGameState(gameStatus.gameState);
 				MainMenuScreen();
-				option = GetUserOptionInput('1', '4');
+				option = GetUserOptionInput('1', '5');
 				switch(option)
 				{
 					case 1: // SET
 						gameStatus.gameState = SET_COORD;
-						alreadySet = false;
 						break;
-					case 2: // PLAY
-						gameStatus.gameState = PLAYING;
-						break;
-					case 3: // END
-						gameStatus.gameState = FIN;
+					case 2: // START NEW GAME
+						ClearScreen();
+						printf("Waiting for other player to start the game...\n");
+						gameStatus.engineState = GetRoleFromServer(playerSocket);
+						if(gameStatus.engineState == NOT_PLAY)
+						{
+							printf("%s\n", errorMessage);
+							WaitFor(2);
+							gameStatus.gameState = FIN;
+						}
+						else
+							gameStatus.gameState = PLAYING;
 						break;
 					case 4: // CONTINUE
 						gameStatus.gameState = SET_COORD;
 						printf("You can not continue the game, because you have not played yet.\n");
-						usleep(1000*1000);
+						WaitFor(1);
+						break;
+					case 5: // EXIT
+						gameStatus.gameState = FIN;
 						break;
 					default: // OTHER INPUT
 						printf("Invalid option.\n");
-						usleep(1000*1000);
+						WaitFor(1);
 						break;
 				}
 				break;
@@ -356,26 +387,38 @@ void GameLoop(int playerSocket)
 				ClearScreen();
 				PrintGameState(gameStatus.gameState);
 				MainMenuScreen();
-				option = GetUserOptionInput('1', '4');
+				option = GetUserOptionInput('1', '5');
 				switch (option)
 				{
-					case 3: // END
-						gameStatus.gameState = FIN;
+					case 3: // END GAME
+						gameStatus.gameState = INIT;
+						/*
+						if(!EndGameMessage(playerSocket, gameStatus))
+						{
+							ClearScreen();
+							printf("%s\n", errorMessage);
+							WaitFor(2);
+							gameStatus.gameState = FIN;
+						}
+						*/
 						break;
 					case 4: // CONTINUE
 						gameStatus.gameState = PLAYING;
 						break;
+					case 5: // EXIT
+						gameStatus.gameState = FIN;
+						break;
 					default: // OTHER INPUT
 						printf("Invalid option.\n");
-						usleep(1000*1000);
+						WaitFor(1);
 						break;
 				}
 				break;
 			case FIN:
 				ClearScreen();
 				PrintGameState(gameStatus.gameState);
+				printf("Last Gameplay State\n\n");
 				GameplayScreen(gameStatus.playerTable, gameStatus.enemyTable);
-				printf("Last Gameplay State\n");
 				printf("End of game, goodbye!\n");
 				gameFinished = true;
 				break;
