@@ -22,7 +22,7 @@
 #define READY "R"
 // Confirm messages
 #define COORD_LENGTH 2
-#define CONFIRM_LENGTH 2
+#define FEEDBACK_LENGTH 2
 #define LOST_FIELD "LF"
 #define MISSED_FIELD "MF"
 #define WON_GAME "WG"

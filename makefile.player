@@ -15,10 +15,10 @@ LDIR = lib
 # Use the -llibname option (this will link in libm.so)
 LIBS=-lm
 
-_DEPS = config.h interface.h table.h message.h
+_DEPS = config.h interface.h table.h message.h game.h
 DEPS = $(patsubst %,$(IDIR)/%,$(_DEPS))
 
-_OBJ = player.o interface.o table.o message.o
+_OBJ = player.o interface.o table.o message.o game.o
 OBJ = $(patsubst %,$(ODIR)/%,$(_OBJ))
 
 # The -c flag says to generate the object file

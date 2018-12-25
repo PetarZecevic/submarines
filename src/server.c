@@ -28,12 +28,12 @@
 #define PLAYER1 1
 #define PLAYER2 2
 
-typedef struct Player
+typedef struct
 {
     int sock;
     int id;
     char coordMessage[COORD_LENGTH];
-    char confirmMessage[CONFIRM_LENGTH];
+    char feedbackMessage[FEEDBACK_LENGTH];
     char errorMessage[DEFAULT_BUFLEN];
     char name[DEFAULT_BUFLEN];
 }Player;
@@ -50,20 +50,20 @@ bool ActivePlayerLogic(Player* activePlayer, Player* passivePlayer, int* active,
         //send_player2_coord_message;
         if(WrapperSend(passivePlayer->sock, activePlayer->coordMessage, COORD_LENGTH, passivePlayer->errorMessage))
         {
-            memset(passivePlayer->confirmMessage, 0, CONFIRM_LENGTH);
-            if(WrapperRecv(passivePlayer->sock, passivePlayer->confirmMessage, CONFIRM_LENGTH, passivePlayer->errorMessage))
+            memset(passivePlayer->feedbackMessage, 0, FEEDBACK_LENGTH);
+            if(WrapperRecv(passivePlayer->sock, passivePlayer->feedbackMessage, FEEDBACK_LENGTH, passivePlayer->errorMessage))
             {
-                printf("%s send %s\n", passivePlayer->name, passivePlayer->confirmMessage);
+                printf("%s send %s\n", passivePlayer->name, passivePlayer->feedbackMessage);
                 //wait_for_player2_confirmation;
                 //confirmation = parse_player2_message;
                 //if confirmation == lost:
-                if(strncmp(passivePlayer->confirmMessage, LOST_GAME, CONFIRM_LENGTH) == 0)
+                if(strncmp(passivePlayer->feedbackMessage, LOST_GAME, FEEDBACK_LENGTH) == 0)
                 {
                     //game_active = false;
                     *gameActive = false;
                 }                                
                 //else if confirmation == miss:
-                else if(strncmp(passivePlayer->confirmMessage, MISSED_FIELD, CONFIRM_LENGTH) == 0)
+                else if(strncmp(passivePlayer->feedbackMessage, MISSED_FIELD, FEEDBACK_LENGTH) == 0)
                 {
                     //active_player = player2;
                     *active = passivePlayer->id;
@@ -75,7 +75,7 @@ bool ActivePlayerLogic(Player* activePlayer, Player* passivePlayer, int* active,
                     *active = activePlayer->id;
                 }
                 //send_player1_confirmation;
-                if(!WrapperSend(activePlayer->sock, passivePlayer->confirmMessage, CONFIRM_LENGTH, activePlayer->errorMessage))
+                if(!WrapperSend(activePlayer->sock, passivePlayer->feedbackMessage, FEEDBACK_LENGTH, activePlayer->errorMessage))
                 {
                     // error section
                     printf("%s error: %s\n", activePlayer->name, activePlayer->errorMessage);
@@ -170,7 +170,8 @@ int main(int argc , char *argv[])
     player2.id = PLAYER2;
     strcpy(player2.name, "Player2");
 
-    char readyMessage[1];
+    char readyMessage[1] = {0};
+
     //Receive a message from player1
     if(WrapperRecv(player1.sock, readyMessage, 1, player1.errorMessage))
     {
@@ -192,6 +193,8 @@ int main(int argc , char *argv[])
         printf("%s error: %s\n", player2.name, player2.errorMessage);
         return 1;
     }
+
+    fflush(stdout);
 
     int activePlayer = PLAYER1;
     if(WrapperSend(player1.sock, ACTIVE, strlen(ACTIVE), player1.errorMessage) && 

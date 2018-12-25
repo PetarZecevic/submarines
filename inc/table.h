@@ -46,4 +46,9 @@ extern bool CheckSubmarine2(const Table t,int row1,int col1,int row2, int col2);
 // Check if coordinate is valid, according to predefined dimension of the table.
 extern bool CoordValid(char r, char c);
 
+/*
+Check if submarine's field is located at coordinate(checkRow, checkColumn)
+*/
+extern bool CheckSubmarineHit(Field submarine[], int submarineLength, int checkRow, int checkColumn);
+
 #endif // TABLE_H

@@ -8,7 +8,6 @@
 
 void MainMenuScreen(void)
 {
-    printf("\tMain Menu\n");
 	printf("Options:\n");
 	printf(" 1. Set Coordinates for your submarines\n");
 	printf(" 2. Start Game\n");
@@ -19,7 +18,6 @@ void MainMenuScreen(void)
 
 void GameplayScreen(const Table playerTable,const Table enemyTable)
 {
-    printf("\tGameplay\n");
 	printf("Your table\n");
 	PrintTable(playerTable);
 	printf("\nEnemy table\n");

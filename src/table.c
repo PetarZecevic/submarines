@@ -89,3 +89,16 @@ bool CoordValid(char r, char c)
 	return (r < ROW) && (r >= 0) && (c < COL) && (c >= 0);
 }
 
+bool CheckSubmarineHit(Field submarine[], int submarineLength, int checkRow, int checkColumn)
+{
+	bool hit = false;
+	for(int i = 0; i < submarineLength; i++)
+	{
+		if(submarine[i].row == checkRow && submarine[i].column == checkColumn)
+		{
+			hit = true;
+			break;
+		}
+	}
+	return hit;
+}
