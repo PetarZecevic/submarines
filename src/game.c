@@ -270,24 +270,36 @@ void GameEngine(int playerSocket, GameStatus* gameStatus)
 		memset(coordMessage, 0, COORD_LENGTH);
 		if(WrapperRecv(playerSocket, coordMessage, COORD_LENGTH, errorMessage))
 		{
-			char r = coordMessage[0];
-			char c = coordMessage[1];
-			r -= '0';
-			c -= '0';
-			if(CreateFeedback(r, c, feedbackMessage, gameStatus))
+			if(strncmp(coordMessage, END_GAME, COORD_LENGTH) == 0)
 			{
 				ClearScreen();
 				printf("Last Gameplay State\n");
 				PrintGameplayInfo(gameStatus);
-				printf("You lost the game!\n");
+				printf("You won the game, other player submitted!\n");
 				WaitFor(3);
 				gameStatus->gameState = INIT;
 			}
-			if(!WrapperSend(playerSocket, feedbackMessage, FEEDBACK_LENGTH, errorMessage))
+			else
 			{
-				printf("%s\n", errorMessage);
-				WaitFor(2);
-				gameStatus->gameState = FIN;
+				char r = coordMessage[0];
+				char c = coordMessage[1];
+				r -= '0';
+				c -= '0';
+				if(CreateFeedback(r, c, feedbackMessage, gameStatus))
+				{
+					ClearScreen();
+					printf("Last Gameplay State\n");
+					PrintGameplayInfo(gameStatus);
+					printf("You lost the game!\n");
+					WaitFor(3);
+					gameStatus->gameState = INIT;
+				}
+				if(!WrapperSend(playerSocket, feedbackMessage, FEEDBACK_LENGTH, errorMessage))
+				{
+					printf("%s\n", errorMessage);
+					WaitFor(2);
+					gameStatus->gameState = FIN;
+				}
 			}
 		}
 		else
@@ -307,6 +319,9 @@ void GameLoop(int playerSocket)
 	bool gameFinished = false;
 	// Option from menies.
 	char option;
+	// Init game status.
+	InitGameStatus(&gameStatus);
+	
 	// Loop.
 	while(!gameFinished)
 	{
@@ -367,7 +382,6 @@ void GameLoop(int playerSocket)
 							gameStatus.gameState = PLAYING;
 						break;
 					case 4: // CONTINUE
-						gameStatus.gameState = SET_COORD;
 						printf("You can not continue the game, because you have not played yet.\n");
 						WaitFor(1);
 						break;
@@ -392,15 +406,24 @@ void GameLoop(int playerSocket)
 				{
 					case 3: // END GAME
 						gameStatus.gameState = INIT;
-						/*
-						if(!EndGameMessage(playerSocket, gameStatus))
+						char endGameMessage[COORD_LENGTH];
+						strcpy(endGameMessage, END_GAME);
+						if(!WrapperSend(playerSocket, endGameMessage, COORD_LENGTH, errorMessage))
 						{
+							// Error case.
 							ClearScreen();
 							printf("%s\n", errorMessage);
 							WaitFor(2);
 							gameStatus.gameState = FIN;
 						}
-						*/
+						else
+						{
+							ClearScreen();
+							printf("Last Gameplay State\n");
+							PrintGameplayInfo(&gameStatus);
+							printf("You lost the game, because you left!\n");
+							WaitFor(3);
+						}
 						break;
 					case 4: // CONTINUE
 						gameStatus.gameState = PLAYING;

@@ -20,6 +20,7 @@
 
 // Messages
 #define READY "R"
+
 // Confirm messages
 #define COORD_LENGTH 2
 #define FEEDBACK_LENGTH 2
@@ -29,6 +30,10 @@
 #define LOST_GAME "LG"
 #define LOST_SUBMARINE_1 "S1"
 #define LOST_SUBMARINE_2 "S2"
+// option for multiple matches.
+#define END_GAME "RG"
+#define EXIT_GAME "EG"
+
 // Role in game messages
 #define PASSIVE "P"
 #define ACTIVE "A"

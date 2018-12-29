@@ -38,9 +38,8 @@ typedef struct
     char name[DEFAULT_BUFLEN];
 }Player;
 
-bool ActivePlayerLogic(Player* activePlayer, Player* passivePlayer, int* active, bool* gameActive)
+void ActivePlayerLogic(Player* activePlayer, Player* passivePlayer, int* active, bool* matchOver, bool* gameOver)
 {
-    bool success = true;
     //wait_for_player1_coordinate;
     memset(activePlayer->coordMessage, 0, COORD_LENGTH);
     if(WrapperRecv(activePlayer->sock, activePlayer->coordMessage, COORD_LENGTH, activePlayer->errorMessage))
@@ -50,6 +49,11 @@ bool ActivePlayerLogic(Player* activePlayer, Player* passivePlayer, int* active,
         //send_player2_coord_message;
         if(WrapperSend(passivePlayer->sock, activePlayer->coordMessage, COORD_LENGTH, passivePlayer->errorMessage))
         {
+            if(strncmp(activePlayer->coordMessage, END_GAME, COORD_LENGTH) == 0)
+            {
+                *matchOver = true;
+                return;
+            }
             memset(passivePlayer->feedbackMessage, 0, FEEDBACK_LENGTH);
             if(WrapperRecv(passivePlayer->sock, passivePlayer->feedbackMessage, FEEDBACK_LENGTH, passivePlayer->errorMessage))
             {
@@ -60,7 +64,7 @@ bool ActivePlayerLogic(Player* activePlayer, Player* passivePlayer, int* active,
                 if(strncmp(passivePlayer->feedbackMessage, LOST_GAME, FEEDBACK_LENGTH) == 0)
                 {
                     //game_active = false;
-                    *gameActive = false;
+                    *matchOver = true;
                 }                                
                 //else if confirmation == miss:
                 else if(strncmp(passivePlayer->feedbackMessage, MISSED_FIELD, FEEDBACK_LENGTH) == 0)
@@ -79,30 +83,35 @@ bool ActivePlayerLogic(Player* activePlayer, Player* passivePlayer, int* active,
                 {
                     // error section
                     printf("%s error: %s\n", activePlayer->name, activePlayer->errorMessage);
-                    success = false;
+                    *matchOver = true;
+                    *gameOver = true;
                 }
             }
             else
             {
                 // error section
                 printf("%s error: %s\n", passivePlayer->name, passivePlayer->errorMessage);
-                success = false;
+                *matchOver = true;
+                *gameOver = true;
             }
         }
         else
         {
             // error section
             printf("%s error: %s\n", passivePlayer->name, passivePlayer->errorMessage);
-            success = false;
+            *matchOver = true;
+            *gameOver = true;
         }
     }
     else
     {
         // error section
         printf("%s error: %s\n", activePlayer->name, activePlayer->errorMessage);
-        success = false;
+        *matchOver = true;
+        *gameOver = true;
     }
-    return success;
+
+    return;
 }
 
 int main(int argc , char *argv[])
@@ -172,57 +181,57 @@ int main(int argc , char *argv[])
 
     char readyMessage[1] = {0};
 
-    //Receive a message from player1
-    if(WrapperRecv(player1.sock, readyMessage, 1, player1.errorMessage))
-    {
-        printf("Message from %s: %s\n", player1.name, readyMessage);
-    }
-    else
-    {
-        printf("%s error: %s\n", player1.name, player1.errorMessage);
-        return 1;
-    }
+    bool gameOver = false;
 
-    //Receive a message from player2
-    if(WrapperRecv(player2.sock, readyMessage, 1, player2.errorMessage))
+    while(!gameOver)
     {
-        printf("Message from %s: %s\n", player2.name, readyMessage);
-    }
-    else
-    {
-        printf("%s error: %s\n", player2.name, player2.errorMessage);
-        return 1;
-    }
-
-    fflush(stdout);
-
-    int activePlayer = PLAYER1;
-    if(WrapperSend(player1.sock, ACTIVE, strlen(ACTIVE), player1.errorMessage) && 
-        WrapperSend(player2.sock, PASSIVE, strlen(PASSIVE), player2.errorMessage))
-    {
-        bool gameActive = true;
-        while(gameActive)
+        //Receive a message from player1
+        if(WrapperRecv(player1.sock, readyMessage, 1, player1.errorMessage))
         {
-            if(activePlayer == PLAYER1)
+            printf("Message from %s: %s\n", player1.name, readyMessage);
+        }
+        else
+        {
+            printf("%s error: %s\n", player1.name, player1.errorMessage);
+            return 1;
+        }
+
+        //Receive a message from player2
+        if(WrapperRecv(player2.sock, readyMessage, 1, player2.errorMessage))
+        {
+            printf("Message from %s: %s\n", player2.name, readyMessage);
+        }
+        else
+        {
+            printf("%s error: %s\n", player2.name, player2.errorMessage);
+            return 1;
+        }
+
+        fflush(stdout);
+
+        int activePlayer = PLAYER1;
+        if(WrapperSend(player1.sock, ACTIVE, strlen(ACTIVE), player1.errorMessage) && 
+            WrapperSend(player2.sock, PASSIVE, strlen(PASSIVE), player2.errorMessage))
+        {
+            bool matchOver = false;
+            while(!matchOver)
             {
-                if(!ActivePlayerLogic(&player1, &player2, &activePlayer, &gameActive))
+                if(activePlayer == PLAYER1)
                 {
-                    gameActive = false;
+                    ActivePlayerLogic(&player1, &player2, &activePlayer, &matchOver, &gameOver);
                 }
-            }
-            else if(activePlayer == PLAYER2)
-            {
-                if(!ActivePlayerLogic(&player2, &player1, &activePlayer, &gameActive))
+                else if(activePlayer == PLAYER2)
                 {
-                    gameActive = false;
+                    ActivePlayerLogic(&player2, &player1, &activePlayer, &matchOver, &gameOver);
                 }
             }
         }
-    }
-    else
-    {
-        printf("%s error: %s \n", player1.name, player1.errorMessage);
-        printf("%s error: %s\n", player2.name, player2.errorMessage);
+        else
+        {
+            printf("%s error: %s \n", player1.name, player1.errorMessage);
+            printf("%s error: %s\n", player2.name, player2.errorMessage);
+            gameOver = true;
+        }
     }
     return 0;
 }
