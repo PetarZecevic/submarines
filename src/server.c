@@ -16,11 +16,14 @@
     ********************************************************************
 */
 
-#include<stdio.h>
-#include<string.h>    //strlen
-#include<sys/socket.h>
-#include<arpa/inet.h> //inet_addr
+#include <stdio.h>
+#include <string.h>    //strlen
+#include <sys/socket.h>
+#include <arpa/inet.h> //inet_addr
 #include<unistd.h>    //write
+#include <pthread.h> // mutex, thread
+#include <semaphore.h> // semaphore
+#include <stdbool.h>
 
 #include "config.h"
 #include "message.h"
@@ -38,91 +41,308 @@ typedef struct
     char name[DEFAULT_BUFLEN];
 }Player;
 
-void ActivePlayerLogic(Player* activePlayer, Player* passivePlayer, int* active, bool* matchOver, bool* gameOver)
+// Global data.
+int activeP;
+int playersConnected = 0;
+int playersReady = 0;
+int roleSend = 0;
+int errorFlag;
+char communicationBuffer[2];
+
+// Mutex for global data.
+pthread_mutex_t dataAccess;
+
+// Semaphores that express thread's activity.
+sem_t activity[2];
+
+// Condition determines action on the semaphore, post or wait.
+void Synchronization(bool condition, sem_t* waitSemaphore, sem_t* notifySemaphore)
+{	
+	if(!condition)
+	{
+		sem_wait(waitSemaphore);
+	}
+	else
+	{
+		sem_post(notifySemaphore);
+	}
+}
+
+/*
+Handles error case.
+Set's errorFlag to 1, and notifies other thread to continue execution.
+*/
+void ErrorCode(sem_t* notifySem)
 {
-    //wait_for_player1_coordinate;
-    memset(activePlayer->coordMessage, 0, COORD_LENGTH);
-    if(WrapperRecv(activePlayer->sock, activePlayer->coordMessage, COORD_LENGTH, activePlayer->errorMessage))
+    pthread_mutex_lock(&dataAccess);
+    errorFlag = 1;
+    pthread_mutex_unlock(&dataAccess);
+    sem_post(notifySem);
+}
+
+/*
+Function that thread executes, thread Id will be 0 or 1.
+We know in advance that we will use two threads, and based 
+on that assumption comunnication mechanism works.
+Params are:
+    - socket of server
+    - Id of thread that executes function
+    - Id of player that thread serves in game
+Thread's communicate between themself using semaphores 
+and global buffer.
+*/
+void* PlayerLogic(void* param)
+{
+    int* iparam = (int*) param;
+    int socketServer = iparam[0];
+    int threadId = iparam[1];
+    int playerId = iparam[2];
+    int otherThreadId = (threadId + 1) % 2;
+
+    int socketPlayer;
+    struct sockaddr_in playerAddr;
+
+    int c = sizeof(playerAddr);
+    socketPlayer = accept(socketServer, (struct sockaddr *)&playerAddr, (socklen_t*)&c);
+    if (socketPlayer < 0)
     {
-        printf("%s send %s\n", activePlayer->name, activePlayer->coordMessage);
-        //coord = parse_player1_message;
-        //send_player2_coord_message;
-        if(WrapperSend(passivePlayer->sock, activePlayer->coordMessage, COORD_LENGTH, passivePlayer->errorMessage))
+        perror("accept failed");
+        ErrorCode(&activity[otherThreadId]);
+        return NULL;
+    }
+    puts("Connection accepted");
+
+    pthread_mutex_lock(&dataAccess);
+    playersConnected++;
+    pthread_mutex_unlock(&dataAccess);
+
+    // Wait for other player to connect, if he didn't connect.
+    Synchronization((playersConnected == 2), &activity[threadId], &activity[otherThreadId]);
+    // Error case.
+    if(errorFlag > 0)
+        return NULL;
+
+    char playerName[8];
+    (playerId == PLAYER1) ? strcpy(playerName, "Player1") : strcpy(playerName, "Player2");
+
+    char readyMessage[2];
+    char roleMessage[2];
+    char errorMessage[DEFAULT_BUFLEN];
+    
+    bool gameOver = false;
+    bool matchOver = false;
+    bool success;
+
+    while(!gameOver)
+    { 
+        //Receive message that player is ready.
+        success = WrapperRecv(socketPlayer, readyMessage, 2, errorMessage);
+        if(success)
         {
-            if(strncmp(activePlayer->coordMessage, END_GAME, COORD_LENGTH) == 0)
-            {
-                *matchOver = true;
-                return;
-            }
-            memset(passivePlayer->feedbackMessage, 0, FEEDBACK_LENGTH);
-            if(WrapperRecv(passivePlayer->sock, passivePlayer->feedbackMessage, FEEDBACK_LENGTH, passivePlayer->errorMessage))
-            {
-                printf("%s send %s\n", passivePlayer->name, passivePlayer->feedbackMessage);
-                //wait_for_player2_confirmation;
-                //confirmation = parse_player2_message;
-                //if confirmation == lost:
-                if(strncmp(passivePlayer->feedbackMessage, LOST_GAME, FEEDBACK_LENGTH) == 0)
-                {
-                    //game_active = false;
-                    *matchOver = true;
-                }                                
-                //else if confirmation == miss:
-                else if(strncmp(passivePlayer->feedbackMessage, MISSED_FIELD, FEEDBACK_LENGTH) == 0)
-                {
-                    //active_player = player2;
-                    *active = passivePlayer->id;
-                }
-                //else
-                else
-                {
-                    //active_player = player1;
-                    *active = activePlayer->id;
-                }
-                //send_player1_confirmation;
-                if(!WrapperSend(activePlayer->sock, passivePlayer->feedbackMessage, FEEDBACK_LENGTH, activePlayer->errorMessage))
-                {
-                    // error section
-                    printf("%s error: %s\n", activePlayer->name, activePlayer->errorMessage);
-                    *matchOver = true;
-                    *gameOver = true;
-                }
-            }
-            else
-            {
-                // error section
-                printf("%s error: %s\n", passivePlayer->name, passivePlayer->errorMessage);
-                *matchOver = true;
-                *gameOver = true;
-            }
+            printf("Message from %s: %s\n", playerName, readyMessage);
+            pthread_mutex_lock(&dataAccess);
+            playersReady++;
+            pthread_mutex_unlock(&dataAccess);
         }
         else
         {
-            // error section
-            printf("%s error: %s\n", passivePlayer->name, passivePlayer->errorMessage);
-            *matchOver = true;
-            *gameOver = true;
+            printf("%s error: %s\n", playerName, errorMessage);
+            ErrorCode(&activity[otherThreadId]);
+            break;
         }
-    }
-    else
-    {
-        // error section
-        printf("%s error: %s\n", activePlayer->name, activePlayer->errorMessage);
-        *matchOver = true;
-        *gameOver = true;
+
+        // Wait while other player is not ready.
+        Synchronization((playersReady == 2), &activity[threadId], &activity[otherThreadId]);
+        if(errorFlag > 0)
+        {
+            break;
+        }
+        // Send message about role.
+        (playerId == activeP) ? strcpy(roleMessage, ACTIVE) : strcpy(roleMessage, PASSIVE);
+        success = WrapperSend(socketPlayer, roleMessage, 2, errorMessage);
+        if(success)
+        {
+            pthread_mutex_lock(&dataAccess);
+            roleSend++;
+            pthread_mutex_unlock(&dataAccess);
+        }
+        else
+        {
+            printf("%s error: %s\n", playerName, errorMessage);
+            ErrorCode(&activity[otherThreadId]);
+            break; 
+        }
+
+        
+        // Wait while other player is not assigned role.
+        Synchronization((roleSend == 2), &activity[threadId], &activity[otherThreadId]);
+        // Error case.
+        if(errorFlag > 0)
+        {
+            break;
+        }
+
+        char coordMessage[COORD_LENGTH];
+        char feedbackMessage[FEEDBACK_LENGTH];
+        bool endGameFlag = false;
+        memset(communicationBuffer, 0, 2);
+
+        while(!matchOver)
+        {
+            // Active case.
+            if(playerId == activeP)
+            {
+                success = WrapperRecv(socketPlayer, coordMessage, COORD_LENGTH, errorMessage);
+                if(!success)
+                {
+                    printf("%s error: %s\n", playerName, errorMessage);
+                    ErrorCode(&activity[otherThreadId]);
+                    gameOver = true;
+                    break;
+                }
+                
+                // Send coordinate to global buffer.
+                pthread_mutex_lock(&dataAccess);
+                strncpy(communicationBuffer, coordMessage, COORD_LENGTH);
+                pthread_mutex_unlock(&dataAccess);
+                
+                if(strncmp(coordMessage, END_GAME, COORD_LENGTH) == 0)
+                {
+                    // Received end-game message instead of coordinate.
+                    printf("%s: Match over, end game situation!\n", playerName);
+                    endGameFlag = true;
+                }
+
+                // Notify other player's thread to get coordinate from buffer.   
+                sem_post(&activity[otherThreadId]);
+                // Wait for feeback message from other player's thread.
+                sem_wait(&activity[threadId]);
+
+                if(errorFlag > 0)
+                {   
+                    // Game and match over.
+                    gameOver = true;
+                    break;
+                }
+                else if(endGameFlag)
+                {
+                    // Match over.
+                    break;
+                }
+
+                pthread_mutex_lock(&dataAccess);
+                strncpy(feedbackMessage, communicationBuffer, FEEDBACK_LENGTH);
+                pthread_mutex_unlock(&dataAccess);
+                
+                if(strncmp(feedbackMessage, LOST_GAME, FEEDBACK_LENGTH) == 0)
+                {
+                    printf("%s: Match over, win-lose situation!\n", playerName);
+                    matchOver = true;
+                } 
+                
+                // Send feedback to active player.  
+                success = WrapperSend(socketPlayer, feedbackMessage, FEEDBACK_LENGTH, errorMessage);
+                if(!success)
+                {
+                    printf("%s error: %s\n", playerName, errorMessage);
+                    ErrorCode(&activity[otherThreadId]);
+                    gameOver = true;
+                    break;   
+                }
+                sem_post(&activity[otherThreadId]);
+            }
+            // Passive case.
+            else
+            {
+                sem_wait(&activity[threadId]);
+                if(errorFlag > 0)
+                {   
+                    // Game and match over.
+                    gameOver = true;
+                    break;
+                }
+
+                pthread_mutex_lock(&dataAccess);
+                strncpy(coordMessage, communicationBuffer, COORD_LENGTH);
+                pthread_mutex_unlock(&dataAccess);
+                
+                if(strncmp(coordMessage, END_GAME, COORD_LENGTH) == 0)
+                {
+                    printf("%s: Match over, end game situation!\n", playerName);
+                    endGameFlag = true;
+                }
+
+                success = WrapperSend(socketPlayer, coordMessage, COORD_LENGTH, errorMessage);
+                if(!success)
+                {
+                    printf("%s error: %s\n", playerName, errorMessage);
+                    ErrorCode(&activity[otherThreadId]);
+                    gameOver = true;
+                    break;
+                }
+
+                if(endGameFlag)
+                {   
+                    // Match over.
+                    sem_post(&activity[otherThreadId]);
+                    break;
+                }
+
+                success = WrapperRecv(socketPlayer, feedbackMessage, FEEDBACK_LENGTH, errorMessage); 
+                if(!success)
+                {
+                    printf("%s error: %s\n", playerName, errorMessage);
+                    ErrorCode(&activity[otherThreadId]);
+                    gameOver = true;
+                    break;
+                }
+
+                pthread_mutex_lock(&dataAccess);
+                strncpy(communicationBuffer, feedbackMessage, FEEDBACK_LENGTH);
+                pthread_mutex_unlock(&dataAccess);
+
+                if(strncmp(feedbackMessage, LOST_GAME, FEEDBACK_LENGTH) == 0)
+                {
+                    printf("%s: Match over, win-lose situation!\n", playerName);
+                    matchOver = true;
+                }                              
+                else if(strncmp(feedbackMessage, MISSED_FIELD, FEEDBACK_LENGTH) == 0)
+                {
+                    pthread_mutex_lock(&dataAccess);
+                    activeP = playerId;
+                    pthread_mutex_unlock(&dataAccess);
+                }
+
+                sem_post(&activity[otherThreadId]);
+                sem_wait(&activity[threadId]);
+
+                if(errorFlag > 0)
+                {   
+                    // Game and match over.
+                    gameOver = true;
+                    break;
+                }
+            }        
+        }
+        
+        // Reset data.
+        pthread_mutex_lock(&dataAccess);
+        playersReady = 0;
+        roleSend = 0;
+        pthread_mutex_unlock(&dataAccess);
+        // Start new match.
+        matchOver = false;
     }
 
-    return;
+    return NULL;
 }
 
-int main(int argc , char *argv[])
+int main(int argc, char** argv)
 {
     int socketServer;
     struct sockaddr_in server;
     
-    int socketPlayer1, socketPlayer2;
-    struct sockaddr_in playerAddr1, playerAddr2;
-
-    //Create socket
+    //Create socket, TCP protocol.
     socketServer = socket(AF_INET , SOCK_STREAM , 0);
     if (socketServer == -1)
     {
@@ -149,90 +369,39 @@ int main(int argc , char *argv[])
 
     //Accept and incoming connection
     puts("Waiting for incoming connections...");
-    int c = sizeof(struct sockaddr_in);
 
-    //accept connection from player1
-    socketPlayer1 = accept(socketServer, (struct sockaddr *)&playerAddr1, (socklen_t*)&c);
-    if (socketPlayer1 < 0)
-    {
-        perror("accept failed");
-        return 1;
-    }
-    puts("Connection accepted");
-    //Init player1 structure
-    Player player1;
-    player1.sock = socketPlayer1;
-    player1.id = PLAYER1;
-    strcpy(player1.name, "Player1");
+    // Player threads.
+    pthread_t player1T;
+    int args1[3] = {socketServer, 0, PLAYER1};
 
-    //accept connection from player2
-    socketPlayer2 = accept(socketServer, (struct sockaddr *)&playerAddr2, (socklen_t*)&c);
-    if (socketPlayer2 < 0)
-    {
-        perror("accept failed");
-        return 1;
-    }
-    puts("Connection accepted");
-    // Init player2 structure
-    Player player2;
-    player2.sock = socketPlayer2;
-    player2.id = PLAYER2;
-    strcpy(player2.name, "Player2");
+    pthread_t player2T;
+    int args2[3] = {socketServer, 1, PLAYER2};
 
-    char readyMessage[1] = {0};
+    // Init mutex and semaphore.
+    pthread_mutex_init(&dataAccess, NULL);
+    sem_init(&activity[0], 0, 0);
+    sem_init(&activity[1], 0, 0);
 
-    bool gameOver = false;
+    // Init global data.
+    playersConnected = 0;
+    playersReady = 0;
+    roleSend = 0;
 
-    while(!gameOver)
-    {
-        //Receive a message from player1
-        if(WrapperRecv(player1.sock, readyMessage, 1, player1.errorMessage))
-        {
-            printf("Message from %s: %s\n", player1.name, readyMessage);
-        }
-        else
-        {
-            printf("%s error: %s\n", player1.name, player1.errorMessage);
-            return 1;
-        }
+    // Set active player.
+    activeP = PLAYER1;
 
-        //Receive a message from player2
-        if(WrapperRecv(player2.sock, readyMessage, 1, player2.errorMessage))
-        {
-            printf("Message from %s: %s\n", player2.name, readyMessage);
-        }
-        else
-        {
-            printf("%s error: %s\n", player2.name, player2.errorMessage);
-            return 1;
-        }
+    // Run threads.
+    pthread_create(&player1T, NULL, PlayerLogic, (void*)args1);
+    pthread_create(&player2T, NULL, PlayerLogic, (void*)args2);
 
-        fflush(stdout);
+    // Finish program.
+    pthread_join(player1T, 0);
+    pthread_join(player2T, 0);
 
-        int activePlayer = PLAYER1;
-        if(WrapperSend(player1.sock, ACTIVE, strlen(ACTIVE), player1.errorMessage) && 
-            WrapperSend(player2.sock, PASSIVE, strlen(PASSIVE), player2.errorMessage))
-        {
-            bool matchOver = false;
-            while(!matchOver)
-            {
-                if(activePlayer == PLAYER1)
-                {
-                    ActivePlayerLogic(&player1, &player2, &activePlayer, &matchOver, &gameOver);
-                }
-                else if(activePlayer == PLAYER2)
-                {
-                    ActivePlayerLogic(&player2, &player1, &activePlayer, &matchOver, &gameOver);
-                }
-            }
-        }
-        else
-        {
-            printf("%s error: %s \n", player1.name, player1.errorMessage);
-            printf("%s error: %s\n", player2.name, player2.errorMessage);
-            gameOver = true;
-        }
-    }
+    // Destroy mutex and semaphore.
+    sem_destroy(&activity[0]);
+    sem_destroy(&activity[1]);
+    pthread_mutex_destroy(&dataAccess);
+
     return 0;
 }
-

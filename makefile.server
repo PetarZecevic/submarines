@@ -6,7 +6,7 @@ SRCDIR = src
 ODIR = obj
 LDIR = lib
 
-LIBS=-lm
+LIBS=-lm -lpthread
 
 _DEPS = config.h message.h
 DEPS = $(patsubst %,$(IDIR)/%,$(_DEPS))

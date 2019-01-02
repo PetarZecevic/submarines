@@ -97,6 +97,10 @@ EngineState GetRoleFromServer(int playerSocket)
 			{
 				retVal = PASSIVE_PLAY;
 			}
+			else
+			{
+				retVal = NOT_PLAY;
+			}
 		}
 		else
 		{
@@ -228,6 +232,7 @@ void GameEngine(int playerSocket, GameStatus* gameStatus)
 						{
 							if(InterpretFeedback(r, c, feedbackMessage, gameStatus))
 							{	
+								gameStatus->engineState = NOT_PLAY;
 								ClearScreen();
 								printf("Last Gameplay State\n");
 								PrintGameplayInfo(gameStatus);
@@ -272,6 +277,7 @@ void GameEngine(int playerSocket, GameStatus* gameStatus)
 		{
 			if(strncmp(coordMessage, END_GAME, COORD_LENGTH) == 0)
 			{
+				gameStatus->engineState = NOT_PLAY;
 				ClearScreen();
 				printf("Last Gameplay State\n");
 				PrintGameplayInfo(gameStatus);
@@ -287,6 +293,7 @@ void GameEngine(int playerSocket, GameStatus* gameStatus)
 				c -= '0';
 				if(CreateFeedback(r, c, feedbackMessage, gameStatus))
 				{
+					gameStatus->engineState = NOT_PLAY;
 					ClearScreen();
 					printf("Last Gameplay State\n");
 					PrintGameplayInfo(gameStatus);
