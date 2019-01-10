@@ -1,5 +1,7 @@
+.gitignore
 lib
 obj
+doc
 PSEUDO.c
 server
 player

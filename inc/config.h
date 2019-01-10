@@ -16,8 +16,6 @@
 #define DEFAULT_PORT   27015
 #define SERVER_IP "127.0.0.1"
 
-#define NUM_OF_PLAYERS 2 // Number of expected clients
-
 // Messages
 #define READY "R"
 
@@ -26,15 +24,15 @@
 #define FEEDBACK_LENGTH 2
 #define LOST_FIELD "LF"
 #define MISSED_FIELD "MF"
-#define WON_GAME "WG"
-#define LOST_GAME "LG"
+#define LOST_MATCH "LM"
+#define LOST_MATCH_M "MM"
 #define LOST_SUBMARINE_1 "S1"
 #define LOST_SUBMARINE_2 "S2"
-// option for multiple matches.
-#define END_GAME "RG"
-#define EXIT_GAME "EG"
 
-// Role in game messages
+// Option for multiple matches.
+#define END_MATCH "RG"
+
+// Role in match messages
 #define PASSIVE "P"
 #define ACTIVE "A"
 

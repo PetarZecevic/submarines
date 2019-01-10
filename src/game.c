@@ -21,18 +21,18 @@ void PrintGameState(GameState gameState)
 	switch(gameState)
 	{
 		case INIT:
-			printf("Place submarines in your table to start the game\n");
+			printf("Place submarines in your table to start the match\n");
 			break;
 		case SET_COORD:
 			printf("Placing submarines in player's table\n");
 		case READY_TO_PLAY:
-			printf("Submarines placed, you are ready to start the game\n");
+			printf("Submarines placed, you are ready to start the match\n");
 			break;
 		case PLAYING:
-			printf("Gameplay in progress\n");
+			printf("Match in progress\n");
 			break;
 		case PAUSE:
-			printf("Game paused\n");
+			printf("Match paused\n");
 			break;
 		case FIN:
 			printf("Game finished\n");
@@ -66,6 +66,10 @@ void PrintGameplayInfo(const GameStatus* gameStatus)
 	{
 		printf("Your turn, guess coordinate of enemy's submarines\n");
 	}
+	else
+	{
+		printf("\n");
+	}
 }
 
 void InitGameStatus(GameStatus* gameStatus)
@@ -78,6 +82,7 @@ void InitGameStatus(GameStatus* gameStatus)
 	gameStatus->fieldsLeftSubmarine2 = 2;
 	gameStatus->wonSubmarine1 = 0;
 	gameStatus->wonSubmarine2 = 0;
+	gameStatus->missedFields = 0;
 }
 
 EngineState GetRoleFromServer(int playerSocket)
@@ -111,7 +116,7 @@ EngineState GetRoleFromServer(int playerSocket)
 	{
 		retVal = NOT_PLAY;
 	}
-	
+
 	return retVal;
 }
 
@@ -139,7 +144,7 @@ bool CreateFeedback(int r, int c, char feedbackMessage[], GameStatus* gameStatus
 		if((gameStatus->fieldsLeftSubmarine1 + gameStatus->fieldsLeftSubmarine2) == 0)
 		{
 			// Lost game.
-			strcpy(feedbackMessage, LOST_GAME);
+			strcpy(feedbackMessage, LOST_MATCH);
 			lost = true;
 		}
 	}
@@ -149,6 +154,12 @@ bool CreateFeedback(int r, int c, char feedbackMessage[], GameStatus* gameStatus
 		if(gameStatus->playerTable[r][c] == WATER)
 		{
 			gameStatus->playerTable[r][c] = MISS;
+			gameStatus->missedFields++;
+			if(gameStatus->missedFields == 6)
+			{
+				strcpy(feedbackMessage, LOST_MATCH_M);
+				lost = true;	
+			}
 		}
 		gameStatus->engineState = ACTIVE_PLAY;
 	}
@@ -181,9 +192,20 @@ bool InterpretFeedback(int r, int c, char feedbackMessage[], GameStatus* gameSta
 		}
 		gameStatus->engineState = PASSIVE_PLAY;
 	}
-	else if(strncmp(feedbackMessage, LOST_GAME, FEEDBACK_LENGTH) == 0)
+	else if(strncmp(feedbackMessage, LOST_MATCH, FEEDBACK_LENGTH) == 0)
 	{
+
+
 		gameStatus->enemyTable[r][c] = HIT;
+		gameStatus->wonSubmarine1 = 1;
+		gameStatus->wonSubmarine2 = 1;
+		wonGame = true;
+	}
+	else if(strncmp(feedbackMessage, LOST_MATCH_M, FEEDBACK_LENGTH) == 0)
+	{
+		gameStatus->enemyTable[r][c] = MISS;
+		gameStatus->wonSubmarine1 = 1;
+		gameStatus->wonSubmarine2 = 1;
 		wonGame = true;
 	}
 	return wonGame;
@@ -235,8 +257,9 @@ void GameEngine(int playerSocket, GameStatus* gameStatus)
 								gameStatus->engineState = NOT_PLAY;
 								ClearScreen();
 								printf("Last Gameplay State\n");
+								GameplayScreen(gameStatus->playerTable, gameStatus->enemyTable);
 								PrintGameplayInfo(gameStatus);
-								printf("You won the game!\n");
+								printf("You won the match!\n");
 								WaitFor(3);
 								gameStatus->gameState = INIT;
 							}
@@ -261,7 +284,7 @@ void GameEngine(int playerSocket, GameStatus* gameStatus)
 					WaitFor(1);
 				}
 				break;
-			case 2: // PAUSE GAME
+			case 2: // PAUSE MATCH
 				gameStatus->gameState = PAUSE;
 				break;
 			default:
@@ -280,8 +303,9 @@ void GameEngine(int playerSocket, GameStatus* gameStatus)
 				gameStatus->engineState = NOT_PLAY;
 				ClearScreen();
 				printf("Last Gameplay State\n");
+				GameplayScreen(gameStatus->playerTable, gameStatus->enemyTable);
 				PrintGameplayInfo(gameStatus);
-				printf("You won the game, other player submitted!\n");
+				printf("You won the match, other player submitted!\n");
 				WaitFor(3);
 				gameStatus->gameState = INIT;
 			}
@@ -296,8 +320,9 @@ void GameEngine(int playerSocket, GameStatus* gameStatus)
 					gameStatus->engineState = NOT_PLAY;
 					ClearScreen();
 					printf("Last Gameplay State\n");
+					GameplayScreen(gameStatus->playerTable, gameStatus->enemyTable);
 					PrintGameplayInfo(gameStatus);
-					printf("You lost the game!\n");
+					printf("You lost the match!\n");
 					WaitFor(3);
 					gameStatus->gameState = INIT;
 				}
@@ -375,9 +400,9 @@ void GameLoop(int playerSocket)
 					case 1: // SET
 						gameStatus.gameState = SET_COORD;
 						break;
-					case 2: // START NEW GAME
+					case 2: // START NEW MATCH
 						ClearScreen();
-						printf("Waiting for other player to start the game...\n");
+						printf("Waiting for other player to start the match...\n");
 						gameStatus.engineState = GetRoleFromServer(playerSocket);
 						if(gameStatus.engineState == NOT_PLAY)
 						{
@@ -389,7 +414,7 @@ void GameLoop(int playerSocket)
 							gameStatus.gameState = PLAYING;
 						break;
 					case 4: // CONTINUE
-						printf("You can not continue the game, because you have not played yet.\n");
+						printf("You can not continue the match, because you have not played yet.\n");
 						WaitFor(1);
 						break;
 					case 5: // EXIT
@@ -411,11 +436,11 @@ void GameLoop(int playerSocket)
 				option = GetUserOptionInput('1', '5');
 				switch (option)
 				{
-					case 3: // END GAME
+					case 3: // END MATCH
 						gameStatus.gameState = INIT;
-						char endGameMessage[COORD_LENGTH];
-						strcpy(endGameMessage, END_GAME);
-						if(!WrapperSend(playerSocket, endGameMessage, COORD_LENGTH, errorMessage))
+						char endMatchMessage[COORD_LENGTH];
+						strcpy(endMatchMessage, END_MATCH);
+						if(!WrapperSend(playerSocket, endMatchMessage, COORD_LENGTH, errorMessage))
 						{
 							// Error case.
 							ClearScreen();
@@ -428,7 +453,7 @@ void GameLoop(int playerSocket)
 							ClearScreen();
 							printf("Last Gameplay State\n");
 							PrintGameplayInfo(&gameStatus);
-							printf("You lost the game, because you left!\n");
+							printf("You lost the match, because you left!\n");
 							WaitFor(3);
 						}
 						break;

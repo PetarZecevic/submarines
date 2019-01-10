@@ -5,10 +5,10 @@
     Katedra:        Racunarska tehnika i racunarske komunikacije (RT-RK)
     Predmet:        Osnovi Racunarskih Mreza 1
     Godina studija: Treca (III)
-    Skolska godina: 2017/2018
+    Skolska godina: 2018/2019
     Semestar:       Zimski (V)
     
-    Ime fajla:      client.c
+    Ime fajla:      player.c
     Opis:           TCP/IP klijent
     
     Platforma:      Raspberry Pi 2 - Model B

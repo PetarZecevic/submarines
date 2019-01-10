@@ -4,6 +4,7 @@
 #include "table.h"
 
 typedef enum {INIT = 0, SET_COORD, READY_TO_PLAY, PLAYING, PAUSE, FIN}GameState;
+
 typedef enum {ACTIVE_PLAY, PASSIVE_PLAY, NOT_PLAY}EngineState;
 
 // Structure that holds all data needed for gameplay.
@@ -16,8 +17,9 @@ typedef struct{
 	int fieldsLeftSubmarine2;
 	int wonSubmarine1;
 	int wonSubmarine2;
-	EngineState engineState;
+	int missedFields;
 	GameState gameState;
+	EngineState engineState;
 }GameStatus;
 
 // Global buffer for storing messages about errors that ocurr during the game.
