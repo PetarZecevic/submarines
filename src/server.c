@@ -49,7 +49,7 @@ int playersConnected = 0;
 int playersReady = 0;
 int roleSend = 0;
 int errorFlag;
-char communicationBuffer[(COORD_LENGTH + FEEDBACK_LENGTH];
+char communicationBuffer[COORD_LENGTH + FEEDBACK_LENGTH];
 // Mutex for global data.
 pthread_mutex_t dataAccess;
 // Semaphores that express thread's activity.
@@ -78,6 +78,60 @@ void ErrorCode(sem_t* notifySem)
     errorFlag = 1;
     pthread_mutex_unlock(&dataAccess);
     sem_post(notifySem);
+}
+
+/*
+Match can start when both players are ready and have been assigned roles.
+*/
+bool PrepareMatch(Player* player, int threadId, int otherThreadId)
+{
+    bool success;
+    //Receive message that player is ready.
+    success = WrapperRecv(player->sock, player->readyMessage, 2, player->errorMessage);
+    if(success)
+    {
+        printf("Message from %s: %s\n", player->name, player->readyMessage);
+        pthread_mutex_lock(&dataAccess);
+        playersReady++;
+        pthread_mutex_unlock(&dataAccess);
+    }
+    else
+    {
+        printf("%s error: %s\n", player->name, player->errorMessage);
+        ErrorCode(&activity[otherThreadId]);
+        return false;
+    }
+
+    // Wait while other player is not ready.
+    Synchronization((playersReady == 2), &activity[threadId], &activity[otherThreadId]);
+    if(errorFlag > 0)
+    {
+        return false;
+    }
+    // Send message about role.
+    (player->id == activePlayer) ? strcpy(player->role, ACTIVE) : strcpy(player->role, PASSIVE);
+    success = WrapperSend(player->sock, player->role, 2, player->errorMessage);
+    if(success)
+    {
+        pthread_mutex_lock(&dataAccess);
+        roleSend++;
+        pthread_mutex_unlock(&dataAccess);
+    }
+    else
+    {
+        printf("%s error: %s\n", player->name, player->errorMessage);
+        ErrorCode(&activity[otherThreadId]);
+        return false; 
+    }
+    // Wait while other player is not assigned role.
+    Synchronization((roleSend == 2), &activity[threadId], &activity[otherThreadId]);
+    // Error case.
+    if(errorFlag > 0)
+    {
+        return false;
+    }
+
+    return success;
 }
 
 /*
@@ -132,53 +186,9 @@ void* PlayerLogic(void* param)
 
     while(!gameOver)
     { 
-        //Receive message that player is ready.
-        success = WrapperRecv(player.sock, player.readyMessage, 2, player.errorMessage);
-        if(success)
-        {
-            printf("Message from %s: %s\n", player.name, player.readyMessage);
-            pthread_mutex_lock(&dataAccess);
-            playersReady++;
-            pthread_mutex_unlock(&dataAccess);
-        }
-        else
-        {
-            printf("%s error: %s\n", player.name, player.errorMessage);
-            ErrorCode(&activity[otherThreadId]);
+        if(!PrepareMatch(&player, threadId, otherThreadId))
             break;
-        }
-
-        // Wait while other player is not ready.
-        Synchronization((playersReady == 2), &activity[threadId], &activity[otherThreadId]);
-        if(errorFlag > 0)
-        {
-            break;
-        }
-        // Send message about role.
-        (player.id == activePlayer) ? strcpy(player.role, ACTIVE) : strcpy(player.role, PASSIVE);
-        success = WrapperSend(player.sock, player.role, 2, player.errorMessage);
-        if(success)
-        {
-            pthread_mutex_lock(&dataAccess);
-            roleSend++;
-            pthread_mutex_unlock(&dataAccess);
-        }
-        else
-        {
-            printf("%s error: %s\n", player.name, player.errorMessage);
-            ErrorCode(&activity[otherThreadId]);
-            break; 
-        }
-
         
-        // Wait while other player is not assigned role.
-        Synchronization((roleSend == 2), &activity[threadId], &activity[otherThreadId]);
-        // Error case.
-        if(errorFlag > 0)
-        {
-            break;
-        }
-
         bool endGameFlag = false;
         memset(communicationBuffer, 0, 2);
 

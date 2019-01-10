@@ -298,7 +298,7 @@ void GameEngine(int playerSocket, GameStatus* gameStatus)
 		memset(coordMessage, 0, COORD_LENGTH);
 		if(WrapperRecv(playerSocket, coordMessage, COORD_LENGTH, errorMessage))
 		{
-			if(strncmp(coordMessage, END_GAME, COORD_LENGTH) == 0)
+			if(strncmp(coordMessage, END_MATCH, COORD_LENGTH) == 0)
 			{
 				gameStatus->engineState = NOT_PLAY;
 				ClearScreen();
