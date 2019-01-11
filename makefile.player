@@ -5,7 +5,7 @@ CC=gcc
 # compiler flags:
 # -g    adds debugging information to the executable file
 # -Wall turns on most, but not all, compiler warnings
-CFLAGS=-ggdb -I$(IDIR) -Wall
+CFLAGS=-ggdb -I$(IDIR) -Wall -std=c99
 
 SRCDIR = src
 ODIR = obj

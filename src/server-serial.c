@@ -2,9 +2,7 @@
 #include <string.h>    //strlen
 #include <sys/socket.h>
 #include <arpa/inet.h> //inet_addr
-#include<unistd.h>    //write
-#include <pthread.h> // mutex, thread
-#include <semaphore.h> // semaphore
+#include <unistd.h>    //write
 #include <stdbool.h>
 
 #include "config.h"

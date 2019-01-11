@@ -1,6 +1,6 @@
 IDIR = inc
 CC=gcc
-CFLAGS=-ggdb -I$(IDIR) -Wall
+CFLAGS=-ggdb -I$(IDIR) -Wall -std=c99
 
 SRCDIR = src
 ODIR = obj
