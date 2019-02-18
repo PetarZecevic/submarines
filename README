@@ -1,0 +1,45 @@
+[1.]
+In order to play the game, you need to first set IP adress of server in inc/config.h file.
+If server and players are running on the same machine 
+you can leave the default IP adress: 127.0.0.1 .
+
+To play the game you neeed to create server and player executable files(programs).
+First open command line in submarines directory.
+
+In order to create server program type:
+-	make server
+To remove program type:
+-	make server_clean
+
+In order to create player program type:
+-	make player
+To remove program type:
+-	make player_clean
+----------------------------------------------------------------------------------------
+[2.]
+
+To play the game first run server program and than player programs.
+To run server program type:
+-	./server
+
+To run player program type:
+-	./player
+-----------------------------------------------------------------------------------------
+[3.]
+
+When you execute player program, at the begining you will see main menu
+from which you can choose listed options.
+
+You choose option by typing number of option and then enter key, example
+input: 1[enter key]
+
+If you type number that doesn't correspond to any option you will see "Invalid option!" prompt.
+Also you can see this prompt if you choose option that is not valid for current state 
+of game(see FSM of player's program).
+------------------------------------------------------------------------------------------
+[4.]
+
+To begin playing match against oponnent first choose option set submarines.
+When you place submarines choose option to start the new match.
+Than you will wait for opponent to start the match.
+When oppopent starts you will see match screen and from there you can play.
